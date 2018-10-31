@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "darray.h"
 
@@ -10,43 +11,37 @@ static lld DEFAULT_INITIAL_SIZE = 16;
 static bool index_out_of_bounds(lld index, lld length);
 static lld modulo_index(lld index, lld length);
 
-DArray *darray_init(lld initial_size, void (*destroy)(void *data))
+int darray_init(DArray *array, lld initial_size, void (*destroy)(void *data))
 {
-    DArray *array = malloc(sizeof (DArray));
-    if (array == NULL) {
-        return NULL;
-    }
-
     if (initial_size == 0) {
         initial_size = DEFAULT_INITIAL_SIZE;
     }
     array->arr = calloc(initial_size, sizeof (void *));
     if (array->arr == NULL) {
-        free(array);
-        return NULL;
+        return -1;
     }
 
     array->capacity = initial_size;
     array->len = 0;
     array->destroy = destroy;
 
-    return array;
+    return 0;
 }
 
-DArray *darray_copy(DArray *array)
+int darray_copy(DArray *to, DArray *from)
 {
-    int length = array->len;
-    DArray *new_array = darray_init(length, array->destroy);
-    if (new_array == NULL) {
-        return NULL;
+    int length = from->len;
+    int retval = darray_init(to, length, from->destroy);
+    if (retval != 0) {
+        return -1;
     }
 
-    new_array->len = length;
+    to->len = length;
     for (int i = 0; i < length; i++) {
-        new_array->arr[0] = array->arr[0];
+        to->arr[0] = from->arr[0];
     }
 
-    return new_array;
+    return 0;
 }
 
 void darray_destroy(DArray *array)
@@ -57,8 +52,7 @@ void darray_destroy(DArray *array)
         }
     }
     free(array->arr);
-    free(array);
-    array = NULL;
+    memset(array, 0, sizeof(DArray));
 }
 
 int darray_push(DArray *array, void *datum)
@@ -114,10 +108,10 @@ int darray_get(DArray *array, void **datum, lld index)
     return 0;
 }
 
-DArray *darray_slice(DArray *source, lld start, lld end)
+int darray_slice(DArray *dest, DArray *source, lld start, lld end)
 {
     if (index_out_of_bounds(start, source->len)
-        || index_out_of_bounds(end, source->len + 1)) return NULL;
+        || index_out_of_bounds(end, source->len + 1)) return -2;
 
     // Turn negative indices into true ones if needs be
     // Respecting that end of slice can be one past the final index
@@ -125,17 +119,17 @@ DArray *darray_slice(DArray *source, lld start, lld end)
     lld m_end = end == source->len ? end : modulo_index(end, source->len);
     
     lld range = m_end - m_start;
-    if (m_start >= m_end) return NULL; // Slice must be in order
+    if (m_start >= m_end) return -3; // Slice must be in order
 
 
-    DArray *dest = darray_init(range, source->destroy);
-    if (dest == NULL) return NULL;
+    int retval = darray_init(dest, range, source->destroy);
+    if (retval != 0) return -1;
 
     for (lld i = 0; i < range; i++) {
         dest->arr[i] = source->arr[m_start + i];
         dest->len++;
     }
-    return dest;
+    return 0;
 }
 
 static bool index_out_of_bounds(lld index, lld length)
